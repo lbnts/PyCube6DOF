@@ -76,11 +76,11 @@ def qmult(q1, q2):
 
 def omega(q):
     "Coloca o quaternion no formato Omega(q) [matriz]"
-    x,y,z,w = q
-    qmatrix = np.array([[w,z,-y,x],
-                       [-z,w,x,y],
-                       [y,-x,w,z],
-                       [-x,-y,-z,w]])
+    qx,qy,qz,qw = q
+    qmatrix = np.array([[qw,qz,-qy,qx],
+                       [-qz,qw,qx,qy],
+                       [qy,-qx,qw,qz],
+                       [-qx,-qy,-qz,qw]])
     return qmatrix
 
 def quat2dcm(q):
