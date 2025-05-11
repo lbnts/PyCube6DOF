@@ -3,7 +3,7 @@ import time
 import matplotlib.pyplot as plt
 from defs_rotations import *
 
-def plot_vector(x, y, title, xl,yl,l1,l2,l3):
+def plot_vector(x, y, title, xl,yl,l1,l2,l3,cond_block = False):
     plt.figure(figsize=(8, 4))
     plt.plot(x, y[:, 0], label=l1)
     plt.plot(x, y[:, 1], label=l2)
@@ -14,9 +14,9 @@ def plot_vector(x, y, title, xl,yl,l1,l2,l3):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plt.show(block = cond_block)
 
-def plot_xy(x, y, title, xl,yl,l1):
+def plot_xy(x, y, title, xl,yl,l1,cond_block = False):
     plt.figure(figsize=(8, 4))
     plt.plot(x, y, label=l1)
     plt.title(title)
@@ -25,9 +25,9 @@ def plot_xy(x, y, title, xl,yl,l1):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plt.show(block = cond_block)
 
-def plot_quat(x, y, title, xl,yl,l1,l2,l3,l4):
+def plot_quat(x, y, title, xl,yl,l1,l2,l3,l4,cond_block = False):
     plt.figure(figsize=(8, 4))
     plt.plot(x, y[:, 0], label=l1)
     plt.plot(x, y[:, 1], label=l2)
@@ -39,7 +39,7 @@ def plot_quat(x, y, title, xl,yl,l1,l2,l3,l4):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plt.show(block = cond_block)
 
 def skew(a):
     """Matriz anti-simétrica (produto vetorial matricial)."""
@@ -81,45 +81,62 @@ def kinematics(w,q,dt):
     q_next = qnorm(q + dq_rk)
     return q_next
 
+def pid_regulation(qa,w):
+    "Calcula o torque necessario para o caso de regulacao PID"
+    # ganhos
+    Kp = 50  # Ganho proporcional
+    Kd = 500 # Ganho derivativo
+    qc = np.array([0,0,0,1])
+    # calcular erro entre quaternion atual e comando
+    qerro =  qnorm(qmult(qconj(qc), qa))
+
+    # calculo da parte proporcional
+    Tpid = Kp*np.sign(qerro[3])*qerro[:3] + Kd*w
+
+    return Tpid
+
 def setup_params():
     "Parametros de simulacao: tempo, incremento"
     dt = 1e-1 # incremento de tempo
     t0 = 0    # tempo inicial
-    tf = 20  # tempo final
+    tf = 300  # tempo final
     n_steps = int(round((tf-t0)/dt,0))  # quantidade de iteracoes
     t_sim = np.linspace(0, tf, n_steps) # array tempo de simulacao
     return dt,t_sim,n_steps
 
 def setup_cubesat():
     "Parametros de massa, inercia, caracteristicas dos sensores e atuadores"
-    J = np.diag([1,2,1]) # Matriz de inercia
+    J = np.diag([1e4,9e3,12e3]) # Matriz de inercia
     return J
 
 def setup_initial_cond():
     "Parametros das condicoes iniciais de simulacao"
-    w = np.array([0.1,0.05,-0.1]) # Condicao inicial de dinamica
-    q = np.array([0,0,0,1])     # Atitude inicial
-    Text = np.array([-0.05,0.025,.1]) # Torques externos
-    return q, w, Text
+    w = np.array([0.53, 0.53, 0.053]) # Condicao inicial de dinamica
+    q = np.array([0.6853, 0.6953, 0.1531, 0.1531])     # Atitude inicial
+    Text = np.array([0,0,0]) # Torques externos
+    Tcontrol = np.array([0,0,0])
+    return q, w, Text, Tcontrol
 
 def __main__():
     dt, t_sim, n_steps = setup_params()
     J = setup_cubesat()
-    q, w, Text = setup_initial_cond()
+    q, w, Text, Tcontrol = setup_initial_cond()
     H = J @ w 
 
     w_data = np.zeros((n_steps,3)) # Prealocar vel angular
     H_data = np.zeros((n_steps,3)) # Prealocar momento angular
     H_norm_data = np.zeros((n_steps,1))
     q_data = np.zeros((n_steps,4))
+    Tc_data = np.zeros((n_steps,3))
     
     w_data[0,:] = w 
     H_data[0,:] = H
     q_data[0,:] = q
+    Tc_data[0,:] = Tcontrol
     H_norm_data[0,:] = np.linalg.norm(H_data[0,:])   
     
     for i in range(1,n_steps):
-        w = dynamics(w,Text,J,dt)
+        w = dynamics(w,Text-Tcontrol,J,dt)
         q = kinematics(w,q,dt)
         # Salvar dados
         w_data[i,:] = w
@@ -127,12 +144,17 @@ def __main__():
         q_data[i,:] = q
         H_norm_data[i,:] = np.linalg.norm(H_data[i,:])
 
+        # Torque de controle
+        Tcontrol = pid_regulation(q,w)
+        Tc_data[i,:] = Tcontrol
+
+
     # Plots
     plot_vector(t_sim, w_data, "Dinâmica de Atitude", "Tempo [s]","Vel. angular [rad/s]",'ω₁','ω₂','ω₃')
     plot_vector(t_sim, H_data, "Momento angular", "Tempo [s]","H [kg⋅m²/s]",'H₁','H₂','H₃')
     plot_xy(t_sim, H_norm_data, "Momento angular modulo", "Tempo [s]","H [kg⋅m²/s]",'H')
     plot_quat(t_sim, q_data, "Quaternions", "Tempo [s]","q",'q1','q2','q3','q4')
-
+    plot_xy(t_sim, Tc_data, "Torque de comando PID", "Tempo [s]","Tc [N.m]",'Tc',cond_block = True)
 
 if __name__ == "__main__":
     __main__()
