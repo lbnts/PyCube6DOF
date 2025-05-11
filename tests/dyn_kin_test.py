@@ -27,6 +27,20 @@ def plot_xy(x, y, title, xl,yl,l1):
     plt.tight_layout()
     plt.show()
 
+def plot_quat(x, y, title, xl,yl,l1,l2,l3,l4):
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, y[:, 0], label=l1)
+    plt.plot(x, y[:, 1], label=l2)
+    plt.plot(x, y[:, 2], label=l3)
+    plt.plot(x, y[:, 3], label=l4)
+    plt.title(title)
+    plt.xlabel(xl)
+    plt.ylabel(yl)
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 def skew(a):
     """Matriz anti-simétrica (produto vetorial matricial)."""
     a1s = np.array([0,-a[2],a[1]])
@@ -64,55 +78,61 @@ def kinematics(w,q,dt):
 
     # Calcula o quaternion no prox passo
     dq_rk = (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
-    q_next = q + dq_rk
+    q_next = qnorm(q + dq_rk)
     return q_next
 
 def setup_params():
     "Parametros de simulacao: tempo, incremento"
     dt = 1e-1 # incremento de tempo
     t0 = 0    # tempo inicial
-    tf = 100  # tempo final
+    tf = 20  # tempo final
     n_steps = int(round((tf-t0)/dt,0))  # quantidade de iteracoes
     t_sim = np.linspace(0, tf, n_steps) # array tempo de simulacao
     return dt,t_sim,n_steps
 
 def setup_cubesat():
     "Parametros de massa, inercia, caracteristicas dos sensores e atuadores"
-    J = np.diag([1,1,1]) # Matriz de inercia
+    J = np.diag([1,2,1]) # Matriz de inercia
     return J
 
 def setup_initial_cond():
     "Parametros das condicoes iniciais de simulacao"
-    w = np.array([0.1,0.1,0.1]) # Condicao inicial de dinamica
-    Text = np.array([0,0,0]) # Torques externos
-    return w, Text
+    w = np.array([0.1,0.05,-0.1]) # Condicao inicial de dinamica
+    q = np.array([0,0,0,1])     # Atitude inicial
+    Text = np.array([-0.05,0.025,.1]) # Torques externos
+    return q, w, Text
 
 def __main__():
     dt, t_sim, n_steps = setup_params()
     J = setup_cubesat()
-    w, Text = setup_initial_cond()
+    q, w, Text = setup_initial_cond()
     H = J @ w 
 
     w_data = np.zeros((n_steps,3)) # Prealocar vel angular
     H_data = np.zeros((n_steps,3)) # Prealocar momento angular
     H_norm_data = np.zeros((n_steps,1))
+    q_data = np.zeros((n_steps,4))
     
     w_data[0,:] = w 
     H_data[0,:] = H
+    q_data[0,:] = q
     H_norm_data[0,:] = np.linalg.norm(H_data[0,:])   
     
     for i in range(1,n_steps):
         w = dynamics(w,Text,J,dt)
-
+        q = kinematics(w,q,dt)
         # Salvar dados
         w_data[i,:] = w
         H_data[i,:] = J @ w
+        q_data[i,:] = q
         H_norm_data[i,:] = np.linalg.norm(H_data[i,:])
 
     # Plots
     plot_vector(t_sim, w_data, "Dinâmica de Atitude", "Tempo [s]","Vel. angular [rad/s]",'ω₁','ω₂','ω₃')
     plot_vector(t_sim, H_data, "Momento angular", "Tempo [s]","H [kg⋅m²/s]",'H₁','H₂','H₃')
     plot_xy(t_sim, H_norm_data, "Momento angular modulo", "Tempo [s]","H [kg⋅m²/s]",'H')
+    plot_quat(t_sim, q_data, "Quaternions", "Tempo [s]","q",'q1','q2','q3','q4')
+
 
 if __name__ == "__main__":
     __main__()
