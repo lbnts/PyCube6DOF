@@ -111,13 +111,18 @@ def setup_cubesat():
 
 def setup_initial_cond():
     "Parametros das condicoes iniciais de simulacao"
-    w = np.array([0.53, 0.53, 0.053]) # Condicao inicial de dinamica
+    w = np.array([0.53*D2R, 0.53*D2R, 0.053*D2R]) # Condicao inicial de dinamica
     q = np.array([0.6853, 0.6953, 0.1531, 0.1531])     # Atitude inicial
     Text = np.array([0,0,0]) # Torques externos
     Tcontrol = np.array([0,0,0])
     return q, w, Text, Tcontrol
 
 def __main__():
+    global R2D #rad para deg
+    global D2R #deg para rad
+
+    R2D = 180/np.pi
+    D2R = np.pi/180
     dt, t_sim, n_steps = setup_params()
     J = setup_cubesat()
     q, w, Text, Tcontrol = setup_initial_cond()
@@ -147,7 +152,6 @@ def __main__():
         # Torque de controle
         Tcontrol = pid_regulation(q,w)
         Tc_data[i,:] = Tcontrol
-
 
     # Plots
     plot_vector(t_sim, w_data, "Dinâmica de Atitude", "Tempo [s]","Vel. angular [rad/s]",'ω₁','ω₂','ω₃')
